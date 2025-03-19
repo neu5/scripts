@@ -1,0 +1,67 @@
+**Module Federation** (from Webpack 5) is great for micro-frontends and sharing code dynamically across applications, but it does have some downsides. Here are the key **disadvantages** to consider:  
+
+---
+
+### **1️⃣ Complex Dependency Management**  
+- If different federated modules depend on **different versions** of the same package, conflicts can arise.  
+- You might need **manual version synchronization** or use **singleton dependencies**, which can lead to runtime issues.  
+
+📌 *Example:* If App A uses `react@17` and App B uses `react@18`, you could run into compatibility issues.  
+
+---
+
+### **2️⃣ Increased Bundle Size & Performance Overhead**  
+- Each module federation container **loads its own dependencies**, leading to possible duplication.  
+- Dynamically loaded modules can introduce **extra network requests**, which may slow down initial page loads.  
+
+📌 *Example:* Instead of one optimized bundle, your app might make multiple requests to fetch dependencies separately.  
+
+---
+
+### **3️⃣ Harder Local Development & Debugging**  
+- Running multiple federated modules locally can be tricky, especially when they rely on remote components.  
+- **Hot Module Replacement (HMR) issues** can arise, making development slower.  
+
+📌 *Example:* If you're working on `App A`, but `App B` (a remote module) has a bug, debugging can be painful.  
+
+---
+
+### **4️⃣ Deployment & Versioning Challenges**  
+- Each federated module is independently deployed, meaning updates can break dependent apps unexpectedly.  
+- You may need **strict versioning** or a **compatibility layer** to avoid breaking changes.  
+
+📌 *Example:* If `HeaderApp` updates its API structure, `MainApp` might break unless it explicitly handles version changes.  
+
+---
+
+### **5️⃣ Initial Load Time Can Be Higher**  
+- Unlike traditional monoliths where all assets are bundled, federated apps load modules **dynamically at runtime**, adding delay.  
+- First-time visits might have a **higher Time to Interactive (TTI)** due to multiple network requests.  
+
+📌 *Example:* A user opening an app might experience a flash of empty content while modules load asynchronously.  
+
+---
+
+### **6️⃣ Limited Support Outside Webpack**  
+- **Module Federation is Webpack-specific**, so it doesn't work natively with tools like **Vite, ESBuild, or Rollup**.  
+- If you need to migrate away from Webpack, it can be a challenge.  
+
+📌 *Example:* Switching from Webpack to Vite would require rethinking your entire module sharing strategy.  
+
+---
+
+### **When to Avoid Module Federation?**  
+❌ When your app is **small** or doesn’t need independent deployments.  
+❌ If you have **strict performance constraints** (fewer network requests = better performance).  
+❌ If you need to support **non-Webpack bundlers** like Vite or Rollup.  
+
+---
+
+### **When is Module Federation a Good Choice?**  
+✅ Large-scale apps where **teams work independently** on different modules.  
+✅ Micro-frontends needing **independent deployments** and lazy loading.  
+✅ When you want to share **UI components or features dynamically** across multiple apps.  
+
+---
+
+Would you like help evaluating if Module Federation fits your project? 🚀
