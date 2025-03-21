@@ -1,3 +1,3 @@
-yarn workspaces foreach --no-private version prerelease --preid $(git rev-parse --short HEAD) --deferred
+yarn workspaces foreach --all --no-private version prerelease --preid $(git rev-parse --short HEAD) --deferred
 yarn version apply
-yarn workspaces foreach --no-private npm publish --tolerate-republish --access public
+yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
