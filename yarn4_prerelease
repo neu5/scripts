@@ -1,14 +1,31 @@
-yarn workspaces foreach --all --no-private version prerelease
+1) yarn workspaces foreach --all --no-private version prerelease
 
-for pkg in $(yarn workspaces list --json | jq -r '.location' | grep -v "node_modules"); do
-  (cd $pkg && node -e "
-    let fs = require('fs');
-    let pkg = JSON.parse(fs.readFileSync('package.json'));
-    let [main, pre] = pkg.version.split('-');
-    let count = pre ? parseInt(pre.split('.')[1] || 0) + 1 : 0;
-    pkg.version = \`\${main}-$(git rev-parse --short HEAD).\${count}\`;
-    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-  ")
-done
+2)
+const fs = require("fs");
+const { execSync } = require("child_process");
 
-yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
+// Get the Git SHA
+const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
+
+// Get all workspaces
+const workspaces = JSON.parse(execSync("yarn workspaces list --json", { encoding: "utf-8" }))
+  .map((ws) => JSON.parse(ws).location)
+  .filter((location) => !location.includes("node_modules"));
+
+workspaces.forEach((workspace) => {
+  const packageJsonPath = `${workspace}/package.json`;
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+
+  // Extract the base version
+  let [main, pre] = packageJson.version.split("-");
+  let count = pre ? parseInt(pre.split(".")[1] || 0) + 1 : 0;
+
+  // Update the version with Git SHA
+  packageJson.version = `${main}-${gitSHA}.${count}`;
+
+  // Write back to package.json
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+  console.log(`Updated ${packageJsonPath} to version ${packageJson.version}`);
+});
+
+3) yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
