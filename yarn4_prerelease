@@ -1,3 +1,14 @@
-yarn workspaces foreach --all --no-private exec npm version prerelease --preid $(git rev-parse --short HEAD) --no-git-tag-version
-yarn version apply
+yarn workspaces foreach --all --no-private version prerelease
+
+for pkg in $(yarn workspaces list --json | jq -r '.location' | grep -v "node_modules"); do
+  (cd $pkg && node -e "
+    let fs = require('fs');
+    let pkg = JSON.parse(fs.readFileSync('package.json'));
+    let [main, pre] = pkg.version.split('-');
+    let count = pre ? parseInt(pre.split('.')[1] || 0) + 1 : 0;
+    pkg.version = \`\${main}-$(git rev-parse --short HEAD).\${count}\`;
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+  ")
+done
+
 yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
