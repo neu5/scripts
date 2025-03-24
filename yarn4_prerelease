@@ -2,30 +2,51 @@
 
 2)
 const fs = require("fs");
+const path = require("path");
 const { execSync } = require("child_process");
 
-// Get the Git SHA
-const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
+try {
+  // Get the Git SHA
+  const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
 
-// Get all workspaces
-const workspaces = JSON.parse(execSync("yarn workspaces list --json", { encoding: "utf-8" }))
-  .map((ws) => JSON.parse(ws).location)
-  .filter((location) => !location.includes("node_modules"));
+  // Get all workspace locations
+  const workspaces = JSON.parse(execSync("yarn workspaces list --json", { encoding: "utf-8" }))
+    .map((ws) => JSON.parse(ws).location)
+    .filter((location) => !location.includes("node_modules"));
 
-workspaces.forEach((workspace) => {
-  const packageJsonPath = `${workspace}/package.json`;
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+  workspaces.forEach((workspace) => {
+    const packageJsonPath = path.join(workspace, "package.json");
 
-  // Extract the base version
-  let [main, pre] = packageJson.version.split("-");
-  let count = pre ? parseInt(pre.split(".")[1] || 0) + 1 : 0;
+    try {
+      // Read package.json safely
+      const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf-8").trim();
+      const packageJson = JSON.parse(packageJsonRaw);
 
-  // Update the version with Git SHA
-  packageJson.version = `${main}-${gitSHA}.${count}`;
+      if (!packageJson.version) {
+        throw new Error(`Missing "version" field in ${packageJsonPath}`);
+      }
 
-  // Write back to package.json
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
-  console.log(`Updated ${packageJsonPath} to version ${packageJson.version}`);
-});
+      // Extract version parts
+      let [main, pre] = packageJson.version.split("-");
+      let count = pre ? parseInt(pre.split(".")[1] || 0) + 1 : 0;
+
+      // Update version with Git SHA
+      packageJson.version = `${main}-${gitSHA}.${count}`;
+
+      // Write back to package.json
+      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+      console.log(`✅ Updated ${packageJsonPath} to version ${packageJson.version}`);
+    } catch (err) {
+      console.error(`❌ Error processing ${packageJsonPath}:`, err.message);
+      process.exit(1);
+    }
+  });
+
+  console.log("🎉 Version update completed successfully!");
+} catch (err) {
+  console.error("❌ Error running script:", err.message);
+  process.exit(1);
+}
+
 
 3) yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
