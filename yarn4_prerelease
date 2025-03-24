@@ -9,18 +9,22 @@ try {
   // Get the Git SHA
   const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
 
-  // Fix: Handle JSON output from yarn workspaces list
+  // Get all workspace locations (fixing JSON parsing issue)
   const workspacesOutput = execSync("yarn workspaces list --json", { encoding: "utf-8" }).trim();
   const workspaces = workspacesOutput
     .split("\n")
-    .map((line) => JSON.parse(line).location)
-    .filter((location) => !location.includes("node_modules"));
+    .map((line) => JSON.parse(line))
+    .filter((ws) => ws.location !== ".") // Exclude the root package.json
+    .map((ws) => ({ name: ws.name, location: ws.location }));
 
-  workspaces.forEach((workspace) => {
-    const packageJsonPath = path.join(workspace, "package.json");
+  // Create a map of package names to new versions
+  const versionMap = {};
+
+  // First pass: update versions
+  workspaces.forEach(({ name, location }) => {
+    const packageJsonPath = path.join(location, "package.json");
 
     try {
-      // Read package.json safely
       const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf-8").trim();
       const packageJson = JSON.parse(packageJsonRaw);
 
@@ -28,18 +32,50 @@ try {
         throw new Error(`Missing "version" field in ${packageJsonPath}`);
       }
 
-      // Extract version parts
+      // Extract version and update it
       let [main, pre] = packageJson.version.split("-");
       let count = pre ? parseInt(pre.split(".")[1] || 0) + 1 : 0;
+      const newVersion = `${main}-${gitSHA}.${count}`;
 
-      // Update version with Git SHA
-      packageJson.version = `${main}-${gitSHA}.${count}`;
+      packageJson.version = newVersion;
+      versionMap[name] = newVersion;
 
-      // Write back to package.json
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
-      console.log(`✅ Updated ${packageJsonPath} to version ${packageJson.version}`);
+      console.log(`✅ Updated ${packageJsonPath} to version ${newVersion}`);
     } catch (err) {
       console.error(`❌ Error processing ${packageJsonPath}:`, err.message);
+      process.exit(1);
+    }
+  });
+
+  // Second pass: update dependencies
+  workspaces.forEach(({ location }) => {
+    const packageJsonPath = path.join(location, "package.json");
+
+    try {
+      const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf-8").trim();
+      const packageJson = JSON.parse(packageJsonRaw);
+
+      let updated = false;
+
+      // Update dependencies, devDependencies, and peerDependencies
+      ["dependencies", "devDependencies", "peerDependencies"].forEach((depType) => {
+        if (packageJson[depType]) {
+          Object.keys(packageJson[depType]).forEach((depName) => {
+            if (versionMap[depName] && packageJson[depType][depName] !== versionMap[depName]) {
+              packageJson[depType][depName] = versionMap[depName];
+              updated = true;
+            }
+          });
+        }
+      });
+
+      if (updated) {
+        fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+        console.log(`🔄 Updated dependencies in ${packageJsonPath}`);
+      }
+    } catch (err) {
+      console.error(`❌ Error processing dependencies in ${packageJsonPath}:`, err.message);
       process.exit(1);
     }
   });
