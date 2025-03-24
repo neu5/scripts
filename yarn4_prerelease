@@ -9,9 +9,11 @@ try {
   // Get the Git SHA
   const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
 
-  // Get all workspace locations
-  const workspaces = JSON.parse(execSync("yarn workspaces list --json", { encoding: "utf-8" }))
-    .map((ws) => JSON.parse(ws).location)
+  // Fix: Handle JSON output from yarn workspaces list
+  const workspacesOutput = execSync("yarn workspaces list --json", { encoding: "utf-8" }).trim();
+  const workspaces = workspacesOutput
+    .split("\n")
+    .map((line) => JSON.parse(line).location)
     .filter((location) => !location.includes("node_modules"));
 
   workspaces.forEach((workspace) => {
