@@ -5,7 +5,7 @@ const packagesDir = path.join(__dirname, 'packages');
 const workspaceDependencyVersion = 'workspace:*';
 
 /**
- * Get all direct package.json files in packages/*/
+ * Get all direct package.json files in packages
  */
 function getTopLevelPackageJsonPaths() {
   const subdirs = fs.readdirSync(packagesDir, { withFileTypes: true })
