@@ -4,6 +4,9 @@ const path = require('path');
 const packagesDir = path.join(__dirname, 'packages');
 const workspaceDependencyVersion = 'workspace:*';
 
+/**
+ * Recursively get all package.json files under a given directory
+ */
 function getAllPackageJsonPaths(dir) {
   const results = [];
 
@@ -24,6 +27,9 @@ function getAllPackageJsonPaths(dir) {
   return results;
 }
 
+/**
+ * Collect names of internal workspace packages
+ */
 function collectWorkspacePackageNames(packageJsonPaths) {
   const names = [];
 
@@ -42,7 +48,10 @@ function collectWorkspacePackageNames(packageJsonPaths) {
   return names;
 }
 
-function updateDependenciesToWorkspace(pkgJsonPath, workspacePackageNames) {
+/**
+ * Update only the internal dependency versions to "workspace:*"
+ */
+function updateDependenciesToWorkspace(pkgJsonPath, internalPackageNames) {
   const content = fs.readFileSync(pkgJsonPath, 'utf-8');
   const pkg = JSON.parse(content);
 
@@ -50,12 +59,14 @@ function updateDependenciesToWorkspace(pkgJsonPath, workspacePackageNames) {
 
   ['dependencies', 'devDependencies', 'peerDependencies'].forEach((depType) => {
     if (pkg[depType]) {
-      for (const name of workspacePackageNames) {
-        if (pkg[depType][name] && pkg[depType][name] !== workspaceDependencyVersion) {
-          pkg[depType][name] = workspaceDependencyVersion;
-          updated = true;
+      internalPackageNames.forEach((name) => {
+        if (Object.prototype.hasOwnProperty.call(pkg[depType], name)) {
+          if (pkg[depType][name] !== workspaceDependencyVersion) {
+            pkg[depType][name] = workspaceDependencyVersion;
+            updated = true;
+          }
         }
-      }
+      });
     }
   });
 
@@ -67,10 +78,10 @@ function updateDependenciesToWorkspace(pkgJsonPath, workspacePackageNames) {
 
 // 🔄 Run the whole process
 const packageJsonPaths = getAllPackageJsonPaths(packagesDir);
-const workspacePackageNames = collectWorkspacePackageNames(packageJsonPaths);
+const internalPackageNames = collectWorkspacePackageNames(packageJsonPaths);
 
-console.log('📦 Found workspace packages:', workspacePackageNames);
+console.log('📦 Found internal packages:', internalPackageNames);
 
 for (const pkgPath of packageJsonPaths) {
-  updateDependenciesToWorkspace(pkgPath, workspacePackageNames);
+  updateDependenciesToWorkspace(pkgPath, internalPackageNames);
 }
