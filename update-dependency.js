@@ -5,30 +5,19 @@ const packagesDir = path.join(__dirname, 'packages');
 const workspaceDependencyVersion = 'workspace:*';
 
 /**
- * Recursively get all package.json files under a given directory
+ * Get all direct package.json files in packages/*/
  */
-function getAllPackageJsonPaths(dir) {
-  const results = [];
+function getTopLevelPackageJsonPaths() {
+  const subdirs = fs.readdirSync(packagesDir, { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => path.join(packagesDir, dirent.name, 'package.json'))
+    .filter(pkgPath => fs.existsSync(pkgPath));
 
-  function walk(currentPath) {
-    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.name === 'package.json') {
-        results.push(fullPath);
-      }
-    }
-  }
-
-  walk(dir);
-  return results;
+  return subdirs;
 }
 
 /**
- * Collect names of internal workspace packages
+ * Collect names of internal workspace packages from top-level package.json files
  */
 function collectWorkspacePackageNames(packageJsonPaths) {
   const names = [];
@@ -76,12 +65,12 @@ function updateDependenciesToWorkspace(pkgJsonPath, internalPackageNames) {
   }
 }
 
-// 🔄 Run the whole process
-const packageJsonPaths = getAllPackageJsonPaths(packagesDir);
-const internalPackageNames = collectWorkspacePackageNames(packageJsonPaths);
+// 🔄 Run the process
+const topLevelPackageJsonPaths = getTopLevelPackageJsonPaths();
+const internalPackageNames = collectWorkspacePackageNames(topLevelPackageJsonPaths);
 
 console.log('📦 Found internal packages:', internalPackageNames);
 
-for (const pkgPath of packageJsonPaths) {
+for (const pkgPath of topLevelPackageJsonPaths) {
   updateDependenciesToWorkspace(pkgPath, internalPackageNames);
 }
