@@ -5,17 +5,14 @@ CUSTOM_MSG="Custom message"
 
 COMMIT_MSG="[$JIRA_ID] $CUSTOM_MSG"$'\n\n'
 
-# Get workspace info from Yarn, skipping private ones
-yarn workspaces list --no-private --json | while read -r line; do
+# Use Yarn to list all non-private workspaces
+while read -r line; do
   NAME=$(echo "$line" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')
   LOCATION=$(echo "$line" | sed -n 's/.*"location": *"\([^"]*\)".*/\1/p')
   VERSION=$(grep '"version"' "$LOCATION/package.json" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
-  echo "- $NAME@$VERSION"
-done | sort >> .commitmsg.tmp
+  COMMIT_MSG+="- $NAME@$VERSION"$'\n'
+done < <(yarn workspaces list --no-private --json)
 
-COMMIT_MSG+=$(cat .commitmsg.tmp)
-rm .commitmsg.tmp
-
-# Create the commit (amend or not)
+# Add and amend commit
 git add .
 git commit --amend -m "$COMMIT_MSG"
