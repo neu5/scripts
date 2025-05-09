@@ -1,15 +1,21 @@
+#!/bin/bash
+
 JIRA_ID="JIRA-123"
 CUSTOM_MSG="Custom message"
 
-CHANGELOG=$(git diff --name-only | grep package.json | while read file; do
-  name=$(grep '"name"' "$file" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
-  version=$(grep '"version"' "$file" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
-  echo "- $name@$version"
-done | sort)
+COMMIT_MSG="[$JIRA_ID] $CUSTOM_MSG"$'\n\n'
 
-COMMIT_MSG="[$JIRA_ID] $CUSTOM_MSG
+# Get workspace info from Yarn, skipping private ones
+yarn workspaces list --no-private --json | while read -r line; do
+  NAME=$(echo "$line" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')
+  LOCATION=$(echo "$line" | sed -n 's/.*"location": *"\([^"]*\)".*/\1/p')
+  VERSION=$(grep '"version"' "$LOCATION/package.json" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+  echo "- $NAME@$VERSION"
+done | sort >> .commitmsg.tmp
 
-$CHANGELOG"
+COMMIT_MSG+=$(cat .commitmsg.tmp)
+rm .commitmsg.tmp
 
+# Create the commit (amend or not)
 git add .
-git commit -m "$COMMIT_MSG"
+git commit --amend -m "$COMMIT_MSG"
