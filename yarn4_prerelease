@@ -1,90 +1,49 @@
-1) yarn workspaces foreach --all --no-private version prerelease
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-2)
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
-
-try {
-  // Get the Git SHA
-  const gitSHA = execSync("git rev-parse --short HEAD").toString().trim();
-
-  // Get all workspace locations (fixing JSON parsing issue)
-  const workspacesOutput = execSync("yarn workspaces list --json", { encoding: "utf-8" }).trim();
-  const workspaces = workspacesOutput
-    .split("\n")
-    .map((line) => JSON.parse(line))
-    .filter((ws) => ws.location !== ".") // Exclude the root package.json
-    .map((ws) => ({ name: ws.name, location: ws.location }));
-
-  // Create a map of package names to new versions
-  const versionMap = {};
-
-  // First pass: update versions
-  workspaces.forEach(({ name, location }) => {
-    const packageJsonPath = path.join(location, "package.json");
-
-    try {
-      const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf-8").trim();
-      const packageJson = JSON.parse(packageJsonRaw);
-
-      if (!packageJson.version) {
-        throw new Error(`Missing "version" field in ${packageJsonPath}`);
-      }
-
-      // Extract version and update it
-      let [main, pre] = packageJson.version.split("-");
-      let count = pre ? parseInt(pre.split(".")[1] || 0) + 1 : 0;
-      const newVersion = `${main}-${gitSHA}.${count}`;
-
-      packageJson.version = newVersion;
-      versionMap[name] = newVersion;
-
-      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
-      console.log(`✅ Updated ${packageJsonPath} to version ${newVersion}`);
-    } catch (err) {
-      console.error(`❌ Error processing ${packageJsonPath}:`, err.message);
-      process.exit(1);
-    }
-  });
-
-  // Second pass: update dependencies
-  workspaces.forEach(({ location }) => {
-    const packageJsonPath = path.join(location, "package.json");
-
-    try {
-      const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf-8").trim();
-      const packageJson = JSON.parse(packageJsonRaw);
-
-      let updated = false;
-
-      // Update dependencies, devDependencies, and peerDependencies
-      ["dependencies", "devDependencies", "peerDependencies"].forEach((depType) => {
-        if (packageJson[depType]) {
-          Object.keys(packageJson[depType]).forEach((depName) => {
-            if (versionMap[depName] && packageJson[depType][depName] !== versionMap[depName]) {
-              packageJson[depType][depName] = versionMap[depName];
-              updated = true;
-            }
-          });
-        }
-      });
-
-      if (updated) {
-        fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
-        console.log(`🔄 Updated dependencies in ${packageJsonPath}`);
-      }
-    } catch (err) {
-      console.error(`❌ Error processing dependencies in ${packageJsonPath}:`, err.message);
-      process.exit(1);
-    }
-  });
-
-  console.log("🎉 Version update completed successfully!");
-} catch (err) {
-  console.error("❌ Error running script:", err.message);
-  process.exit(1);
+function getWorkspaces() {
+  const output = execSync('yarn workspaces list --json', { encoding: 'utf-8' });
+  return output
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line))
+    .map(pkg => pkg.location);
 }
 
+function getShortCommitHash() {
+  return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+}
 
-3) yarn workspaces foreach --all --no-private npm publish --tolerate-republish --access public
+function bumpVersion(version, commitHash) {
+  const [major, minor, patchAndPrerelease] = version.split('.');
+  const [patch] = patchAndPrerelease.split('-');
+
+  const newPatch = parseInt(patch) + 1;
+  return `${major}.${minor}.${newPatch}-${commitHash}`;
+}
+
+function updatePackageVersion(pkgPath, commitHash) {
+  const pkgJsonPath = path.join(pkgPath, 'package.json');
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+
+  const oldVersion = pkgJson.version;
+  const newVersion = bumpVersion(oldVersion, commitHash);
+
+  pkgJson.version = newVersion;
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+  console.log(`Updated ${pkgJson.name}: ${oldVersion} → ${newVersion}`);
+}
+
+function main() {
+  const commitHash = getShortCommitHash();
+  const packages = getWorkspaces();
+
+  for (const pkg of packages) {
+    updatePackageVersion(pkg, commitHash);
+  }
+
+  console.log('All versions bumped.');
+}
+
+main();
