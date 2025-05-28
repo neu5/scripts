@@ -19,7 +19,7 @@ function bumpVersion(version, commitHash) {
   const [major, minor, patchAndPrerelease] = version.split('.');
   const [patch] = patchAndPrerelease.split('-');
 
-  const newPatch = parseInt(patch) + 1;
+  const newPatch = parseInt(patch, 10) + 1;
   return `${major}.${minor}.${newPatch}-${commitHash}`;
 }
 
@@ -30,9 +30,11 @@ function updatePackageVersion(pkgPath, commitHash) {
   const oldVersion = pkgJson.version;
   const newVersion = bumpVersion(oldVersion, commitHash);
 
+  pkgJson.stableVersion = oldVersion;
   pkgJson.version = newVersion;
-  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-  console.log(`Updated ${pkgJson.name}: ${oldVersion} → ${newVersion}`);
+
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  console.log(`✔ Updated ${pkgJson.name}: ${oldVersion} → ${newVersion}`);
 }
 
 function main() {
@@ -43,7 +45,7 @@ function main() {
     updatePackageVersion(pkg, commitHash);
   }
 
-  console.log('All versions bumped.');
+  console.log('✅ All package versions bumped and stableVersion recorded.');
 }
 
 main();
