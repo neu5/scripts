@@ -1,0 +1,62 @@
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+function getWorkspaces() {
+  const output = execSync('yarn workspaces list --json', { encoding: 'utf-8' });
+  return output
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line))
+    .map(pkg => pkg.location);
+}
+
+function bumpVersion(version) {
+  const [major, minor, patchAndPrerelease] = version.split('.');
+  const [patch, prerelease] = patchAndPrerelease.split('-');
+
+  let newVersion;
+
+  if (!prerelease) {
+    // no prerelease suffix yet → start fix.0
+    newVersion = `${major}.${minor}.${patch}-fix.0`;
+  } else {
+    const [tag, num] = prerelease.split('.');
+    if (tag === 'fix' && !isNaN(num)) {
+      // increment existing fix version
+      const newNum = parseInt(num, 10) + 1;
+      newVersion = `${major}.${minor}.${patch}-fix.${newNum}`;
+    } else {
+      // if prerelease is something else (like beta, alpha, etc.), reset to fix.0
+      newVersion = `${major}.${minor}.${patch}-fix.0`;
+    }
+  }
+
+  return newVersion;
+}
+
+function updatePackageVersion(pkgPath) {
+  const pkgJsonPath = path.join(pkgPath, 'package.json');
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+
+  const oldVersion = pkgJson.version;
+  const newVersion = bumpVersion(oldVersion);
+
+  pkgJson.stableVersion = oldVersion;
+  pkgJson.version = newVersion;
+
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  console.log(`✔ Updated ${pkgJson.name}: ${oldVersion} → ${newVersion}`);
+}
+
+function main() {
+  const packages = getWorkspaces();
+
+  for (const pkg of packages) {
+    updatePackageVersion(pkg);
+  }
+
+  console.log('✅ All package versions bumped with fix suffix.');
+}
+
+main();
