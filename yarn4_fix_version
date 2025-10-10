@@ -85,8 +85,21 @@ function gitCommit(message) {
 
 function pushGitChanges() {
   console.log('🚀 Pushing commits and tags to origin...');
-  run('git push');
-  run('git push --tags');
+
+  let branch = '';
+  try {
+    branch = run('git rev-parse --abbrev-ref HEAD');
+    if (branch === 'HEAD' || !branch) {
+      // Detached HEAD → fallback to environment variable or default
+      branch = process.env.GIT_BRANCH || 'master';
+    }
+  } catch {
+    branch = 'master';
+  }
+
+  console.log(`📦 Detected branch: ${branch}`);
+  run(`git push origin HEAD:${branch}`);
+  run('git push origin --tags');
 }
 
 function main() {
