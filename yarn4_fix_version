@@ -8,16 +8,22 @@ function getWorkspaces() {
     .trim()
     .split('\n')
     .map(line => JSON.parse(line))
-    .map(pkg => pkg.location);
+    .map(pkg => ({
+      name: pkg.name,
+      location: pkg.location
+    }));
 }
 
-/**
- * Bumps version using the following logic:
- *  - 1.0.0         → 1.0.1-fix.0 (stableVersion = 1.0.0)
- *  - 1.0.1-fix.0   → 1.0.1-fix.1 (stableVersion = 1.0.1)
- *  - 1.0.1-fix.5   → 1.0.1-fix.6 (stableVersion = 1.0.1)
- *  - 1.0.1-beta.2  → 1.0.2-fix.0 (stableVersion = 1.0.1)
- */
+function run(cmd, opts = {}) {
+  try {
+    return execSync(cmd, { stdio: 'pipe', encoding: 'utf-8', ...opts }).trim();
+  } catch (err) {
+    console.error(`❌ Command failed: ${cmd}`);
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
 function bumpVersion(version) {
   const [core, prerelease] = version.split('-');
   let [major, minor, patch] = core.split('.').map(Number);
@@ -26,11 +32,9 @@ function bumpVersion(version) {
   let newVersion;
 
   if (prerelease && prerelease.startsWith('fix.')) {
-    // Increment existing fix version
     const currentFixNum = parseInt(prerelease.split('.')[1], 10) || 0;
     newVersion = `${major}.${minor}.${patch}-fix.${currentFixNum + 1}`;
   } else {
-    // Bump patch and start fix.0
     patch += 1;
     newVersion = `${major}.${minor}.${patch}-fix.0`;
   }
@@ -38,28 +42,77 @@ function bumpVersion(version) {
   return { newVersion, stableVersion };
 }
 
-function updatePackageVersion(pkgPath) {
-  const pkgJsonPath = path.join(pkgPath, 'package.json');
+function updatePackageVersion(pkg) {
+  const pkgJsonPath = path.join(pkg.location, 'package.json');
   const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
 
   const oldVersion = pkgJson.version;
   const { newVersion, stableVersion } = bumpVersion(oldVersion);
 
+  // ✅ Skip if version didn't change
+  if (oldVersion === newVersion) {
+    console.log(`↩️  Skipped ${pkg.name}: version unchanged (${oldVersion})`);
+    return null;
+  }
+
   pkgJson.stableVersion = stableVersion;
   pkgJson.version = newVersion;
 
   fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
-  console.log(`✔ Updated ${pkgJson.name}: ${oldVersion} → ${newVersion} (stable: ${stableVersion})`);
+  console.log(`✔ Updated ${pkg.name}: ${oldVersion} → ${newVersion} (stable: ${stableVersion})`);
+
+  return { name: pkg.name, newVersion, path: pkgJsonPath };
+}
+
+function createGitTag(packageName, version) {
+  const tag = `${packageName}@${version}`;
+  console.log(`🏷  Creating tag ${tag}`);
+  run(`git tag -a "${tag}" -m "Release ${tag}"`);
+  return tag;
+}
+
+function gitAdd(filePath) {
+  run(`git add "${filePath}"`);
+}
+
+function gitCommit(message) {
+  try {
+    run(`git commit -m "${message}"`);
+  } catch {
+    console.log('ℹ️  Nothing to commit (maybe no version changes).');
+  }
+}
+
+function pushGitChanges() {
+  console.log('🚀 Pushing commits and tags to origin...');
+  run('git push');
+  run('git push --tags');
 }
 
 function main() {
   const packages = getWorkspaces();
+  const taggedPackages = [];
 
   for (const pkg of packages) {
-    updatePackageVersion(pkg);
+    const updated = updatePackageVersion(pkg);
+    if (!updated) continue;
+
+    gitAdd(updated.path);
+    const tag = createGitTag(updated.name, updated.newVersion);
+    taggedPackages.push(tag);
   }
 
-  console.log('✅ All package versions bumped with fix suffix.');
+  if (taggedPackages.length > 0) {
+    gitCommit('chore: bump fix versions');
+    pushGitChanges();
+  } else {
+    console.log('✅ No version changes detected. Nothing to commit or tag.');
+  }
+
+  if (taggedPackages.length > 0) {
+    console.log('\n✅ Done! Created and pushed tags:');
+    taggedPackages.forEach(t => console.log(`   - ${t}`));
+  }
 }
 
 main();
